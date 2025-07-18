@@ -1,9 +1,9 @@
 'use client'
 
-import { ThemeProvider } from '@/components/theme-provider'
-import { ReactQueryProvider } from './react-query-provider'
+import { ThemeProvider } from '@/components/ThemeProvider'
+import { ReactQueryProvider } from './ReactQueryProvider'
 import { ClusterProvider } from '@/components/cluster/cluster-data-access'
-import { SolanaProvider } from '@/components/solana/solana-provider'
+import { SolanaProvider } from '@/components/solana/SolanaProvider'
 import React from 'react'
 
 export function AppProviders({ children }: Readonly<{ children: React.ReactNode }>) {
