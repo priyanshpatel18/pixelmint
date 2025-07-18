@@ -14,6 +14,7 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults'
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { Check, Crown, ImageIcon, Layers, Loader2, Rocket, Sparkles, Upload, X } from 'lucide-react'
+import Image from 'next/image'
 import { ChangeEvent, useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -217,7 +218,7 @@ export default function LaunchpadPage() {
       umi.use(walletAdapterIdentity(wallet.adapter))
       setStep(2)
 
-      let collectionMint: any = null
+      let collectionMint = null
 
       // Create new collection if needed
       if (collectionConfig.createNewCollection) {
@@ -263,6 +264,7 @@ export default function LaunchpadPage() {
           setCollectionMintAddress(collectionConfig.existingCollectionMint)
           setStep(3)
         } catch (err) {
+          console.error(err)
           throw new Error('Invalid collection mint address provided.')
         }
       }
@@ -346,12 +348,14 @@ export default function LaunchpadPage() {
         description: `Your NFT is now live on Solana! Mint Address: ${mint.publicKey.toString()}`,
         duration: 8000,
       })
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating NFT:', err)
-      toast.error('Failed to create NFT.', {
-        description: err?.message || 'An unknown error occurred during the process. Please try again.',
-        duration: 5000,
-      })
+      if (err instanceof Error) {
+        toast.error('Failed to create NFT.', {
+          description: err.message,
+          duration: 5000,
+        })
+      }
       setStep(1)
     } finally {
       setLoading(false)
@@ -683,10 +687,12 @@ export default function LaunchpadPage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-0">
-                        <img
+                        <Image
                           src={collectionImagePreview}
                           alt="Collection Preview"
-                          className="w-full h-32 object-cover rounded-lg mb-2 border border-border"
+                          width={200}
+                          height={200}
+                          className="object-cover rounded-lg mb-2 border border-border"
                         />
                         <h5 className="font-semibold text-foreground text-sm">
                           {collectionConfig.collectionName || 'Collection Name'}
@@ -702,10 +708,12 @@ export default function LaunchpadPage() {
                     </CardHeader>
                     <CardContent className="p-0">
                       {imagePreview ? (
-                        <img
+                        <Image
                           src={imagePreview}
                           alt="Preview"
-                          className="w-full h-64 object-cover rounded-lg mb-4 border border-border"
+                          width={200}
+                          height={200}
+                          className="object-cover rounded-lg mb-4 border border-border"
                         />
                       ) : (
                         <div className="w-full h-64 bg-secondary rounded-lg flex items-center justify-center mb-4 border border-border">
