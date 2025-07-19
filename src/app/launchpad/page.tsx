@@ -4,16 +4,18 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { createNft, findMasterEditionPda, findMetadataPda, mplTokenMetadata, verifyCollection } from '@metaplex-foundation/mpl-token-metadata'
-import { generateSigner, percentAmount, publicKey } from '@metaplex-foundation/umi'
+import { createNft, mplTokenMetadata } from '@metaplex-foundation/mpl-token-metadata'
+import {
+  generateSigner,
+  percentAmount
+} from '@metaplex-foundation/umi'
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults'
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { Check, Crown, ImageIcon, Layers, Loader2, Rocket, Sparkles, Upload, X } from 'lucide-react'
+import { Connection } from '@solana/web3.js'
+import { Check, ImageIcon, Loader2, Rocket, Sparkles, Upload, X } from 'lucide-react'
 import Image from 'next/image'
 import { ChangeEvent, useCallback, useState } from 'react'
 import { toast } from 'sonner'
@@ -38,6 +40,7 @@ const umi = createUmi('https://api.devnet.solana.com').use(mplTokenMetadata())
 
 export default function LaunchpadPage() {
   const { publicKey: walletPublicKey, wallet } = useWallet()
+  const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
   const [step, setStep] = useState<number>(1)
   const [loading, setLoading] = useState<boolean>(false)
   const [success, setSuccess] = useState<boolean>(false)
@@ -53,35 +56,9 @@ export default function LaunchpadPage() {
     image: null,
     attributes: [],
   })
-
-  // New state for master edition and collection
-  const [masterEditionConfig, setMasterEditionConfig] = useState<{
-    createMasterEdition: boolean
-    maxSupply: number | null
-  }>({
-    createMasterEdition: true,
-    maxSupply: null
-  })
-
-  const [collectionConfig, setCollectionConfig] = useState<{
-    createNewCollection: boolean
-    collectionName: string
-    collectionDescription: string
-    collectionImage: File | null
-    existingCollectionMint: string
-  }>({
-    createNewCollection: true,
-    collectionName: '',
-    collectionDescription: '',
-    collectionImage: null,
-    existingCollectionMint: ''
-  })
-
   const [imagePreview, setImagePreview] = useState<string>('')
-  const [collectionImagePreview, setCollectionImagePreview] = useState<string>('')
   const [attribute, setAttribute] = useState<Attribute>({ trait_type: '', value: '' })
   const [mintAddress, setMintAddress] = useState<string>('')
-  const [collectionMintAddress, setCollectionMintAddress] = useState<string>('')
 
   // Pinata API keys
   const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY ?? ''
@@ -104,21 +81,6 @@ export default function LaunchpadPage() {
     }
   }, [])
 
-  const handleCollectionImageUpload = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setCollectionConfig(prev => ({ ...prev, collectionImage: file }))
-
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const result = event.target?.result
-        if (typeof result === 'string') {
-          setCollectionImagePreview(result)
-        }
-      }
-      reader.readAsDataURL(file)
-    }
-  }, [])
 
   const addAttribute = () => {
     if (attribute.trait_type && attribute.value) {
@@ -190,172 +152,55 @@ export default function LaunchpadPage() {
       return
     }
 
-    if (collectionConfig.createNewCollection) {
-      if (!collectionConfig.collectionName.trim()) {
-        toast.error('Please provide a collection name.')
-        return
-      }
-      if (!collectionConfig.collectionImage) {
-        toast.error('Please upload a collection image.')
-        return
-      }
-    } else {
-      if (!collectionConfig.existingCollectionMint.trim()) {
-        toast.error('Please provide an existing collection mint address.')
-        return
-      }
-    }
 
     try {
       setLoading(true)
       setSuccess(false)
       setStep(1)
 
-      toast.info('Starting NFT creation process...', {
-        description: 'Preparing your wallet and data for upload.',
-      })
-
+      toast.info('Initializing UMI...')
       umi.use(walletAdapterIdentity(wallet.adapter))
-      setStep(2)
 
-      let collectionMint = null
+      setStep(3)
+      toast.info('Uploading NFT image to Pinata...')
+      const nftImageUri = await uploadToPinata(formData.image)
 
-      // Create new collection if needed
-      if (collectionConfig.createNewCollection) {
-        toast.info('Creating new collection...', {
-          description: 'Uploading collection image and metadata.',
-        })
-
-        const collectionImageUri = await uploadToPinata(collectionConfig.collectionImage!)
-
-        const collectionMetadata: Metadata = {
-          name: collectionConfig.collectionName,
-          description: collectionConfig.collectionDescription,
-          image: collectionImageUri,
-          attributes: [],
-          properties: {
-            files: [
-              {
-                uri: collectionImageUri,
-                type: collectionConfig.collectionImage!.type,
-              },
-            ],
-          },
-        }
-
-        const collectionMetadataUri = await uploadToPinata(collectionMetadata, true)
-
-        collectionMint = generateSigner(umi)
-
-        await createNft(umi, {
-          mint: collectionMint,
-          name: collectionConfig.collectionName,
-          uri: collectionMetadataUri,
-          sellerFeeBasisPoints: percentAmount(0),
-          isMutable: true,
-          isCollection: true,
-        })
-
-        setCollectionMintAddress(collectionMint.publicKey.toString())
-        setStep(3)
-      } else {
-        try {
-          collectionMint = { publicKey: publicKey(collectionConfig.existingCollectionMint) }
-          setCollectionMintAddress(collectionConfig.existingCollectionMint)
-          setStep(3)
-        } catch (err) {
-          console.error(err)
-          throw new Error('Invalid collection mint address provided.')
-        }
-      }
-
-      toast.info('Uploading NFT image to IPFS...', {
-        description: 'This might take a moment depending on image size.',
-      })
-      const imageUri = await uploadToPinata(formData.image)
-      setStep(4)
-
-      toast.info('Uploading NFT metadata to IPFS...', {
-        description: 'Your NFT details are being secured on Pinata.',
-      })
-      const metadata: Metadata = {
+      toast.info('Uploading NFT metadata to Pinata...')
+      const nftMetadata = {
         name: formData.name,
-        description: formData.description,
-        image: imageUri,
-        attributes: formData.attributes,
-        properties: {
-          files: [
-            {
-              uri: imageUri,
-              type: formData.image.type,
-            },
-          ],
-        },
+        description: formData.description || '',
+        image: nftImageUri,
+        attributes: formData.attributes || [],
       }
-      const metadataUri = await uploadToPinata(metadata, true)
-      setStep(5)
-
-      toast.info('Preparing NFT mint transaction...', {
-        description: 'Generating a new mint address for your NFT.',
-      })
-      const mint = generateSigner(umi)
-      const nftTransactionBuilder = createNft(umi, {
-        mint,
-        name: formData.name,
-        uri: metadataUri,
-        sellerFeeBasisPoints: percentAmount(5),
-        creators: [
-          {
-            address: umi.identity.publicKey,
-            verified: true,
-            share: 100,
-          },
-        ],
-        isMutable: true,
-        collection: {
-          key: collectionMint.publicKey,
-          verified: false,
-        },
-        ...(masterEditionConfig.createMasterEdition && {
-          isCollection: false,
-          ruleSet: null,
-        }),
-      })
-
-      nftTransactionBuilder.add(
-        verifyCollection(umi, {
-          metadata: findMetadataPda(umi, { mint: mint.publicKey }),
-          collectionMint: collectionMint.publicKey,
-          collection: findMetadataPda(umi, { mint: collectionMint.publicKey }),
-          collectionMasterEditionAccount: findMasterEditionPda(umi, { mint: collectionMint.publicKey }),
-          collectionAuthority: umi.identity,
-        })
+      const nftMetadataUri = await uploadToPinata(
+        new File([JSON.stringify(nftMetadata)], 'metadata.json', { type: 'application/json' }),
       )
 
-      await nftTransactionBuilder.sendAndConfirm(umi)
+      setStep(4)
+      const nftSigner = generateSigner(umi)
 
-      setStep(6)
+      toast.info('Creating NFT onchain...')
+      await createNft(umi, {
+        mint: nftSigner,
+        name: formData.name,
+        uri: nftMetadataUri,
+        sellerFeeBasisPoints: percentAmount(5),
+      }).sendAndConfirm(umi)
 
-      toast.info('Finalizing mint...', {
-        description: 'Please approve the transaction in your wallet.',
-      })
-
-      setMintAddress(mint.publicKey.toString())
+      setMintAddress(nftSigner.publicKey.toString())
+      setStep(5)
       setSuccess(true)
-      setStep(7)
 
-      toast.success('NFT Created Successfully!', {
-        description: `Your NFT is now live on Solana! Mint Address: ${mint.publicKey.toString()}`,
+      toast.success('NFT created successfully.', {
+        description: `Mint Address: ${nftSigner.publicKey.toString()}`,
         duration: 8000,
       })
     } catch (err) {
       console.error('Error creating NFT:', err)
-      if (err instanceof Error) {
-        toast.error('Failed to create NFT.', {
-          description: err.message,
-          duration: 5000,
-        })
-      }
+      toast.error('Failed to create NFT.', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+        duration: 5000,
+      })
       setStep(1)
     } finally {
       setLoading(false)
@@ -364,23 +209,10 @@ export default function LaunchpadPage() {
 
   const resetForm = () => {
     setFormData({ name: '', description: '', image: null, attributes: [] })
-    setCollectionConfig({
-      createNewCollection: true,
-      collectionName: '',
-      collectionDescription: '',
-      collectionImage: null,
-      existingCollectionMint: ''
-    })
-    setMasterEditionConfig({
-      createMasterEdition: true,
-      maxSupply: null
-    })
     setImagePreview('')
-    setCollectionImagePreview('')
     setStep(1)
     setSuccess(false)
     setMintAddress('')
-    setCollectionMintAddress('')
   }
 
   return (
@@ -414,12 +246,6 @@ export default function LaunchpadPage() {
                   <p className="text-sm text-muted-foreground mb-1">NFT Mint Address:</p>
                   <p className="font-mono text-sm break-all text-foreground">{mintAddress}</p>
                 </div>
-                {collectionMintAddress && (
-                  <div className="bg-muted rounded-xl p-4">
-                    <p className="text-sm text-muted-foreground mb-1">Collection Mint Address:</p>
-                    <p className="font-mono text-sm break-all text-foreground">{collectionMintAddress}</p>
-                  </div>
-                )}
               </div>
               <Button
                 onClick={resetForm}
@@ -448,124 +274,6 @@ export default function LaunchpadPage() {
               <div className="grid lg:grid-cols-2 gap-8">
                 {/* Left Column - Form */}
                 <div className="space-y-6">
-                  {/* Collection Configuration */}
-                  <Card className="bg-muted/50 border-dashed border-2 border-primary/20">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Layers className="h-5 w-5" />
-                        Collection Settings
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="create-collection"
-                          checked={collectionConfig.createNewCollection}
-                          onCheckedChange={(checked: boolean) =>
-                            setCollectionConfig(prev => ({ ...prev, createNewCollection: checked }))
-                          }
-                          disabled={loading}
-                        />
-                        <Label htmlFor="create-collection">Create New Collection</Label>
-                      </div>
-
-                      {collectionConfig.createNewCollection ? (
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="collection-name">Collection Name *</Label>
-                            <Input
-                              id="collection-name"
-                              value={collectionConfig.collectionName}
-                              onChange={(e) => setCollectionConfig(prev => ({ ...prev, collectionName: e.target.value }))}
-                              placeholder="My NFT Collection"
-                              disabled={loading}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="collection-description">Collection Description</Label>
-                            <Textarea
-                              id="collection-description"
-                              value={collectionConfig.collectionDescription}
-                              onChange={(e) => setCollectionConfig(prev => ({ ...prev, collectionDescription: e.target.value }))}
-                              placeholder="Describe your collection"
-                              rows={2}
-                              disabled={loading}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="collection-image">Collection Image *</Label>
-                            <div className="border-2 border-dashed border-input rounded-lg p-4 text-center hover:border-primary transition-colors cursor-pointer mt-2">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleCollectionImageUpload}
-                                className="hidden"
-                                id="collection-image"
-                                disabled={loading}
-                              />
-                              <label htmlFor="collection-image" className="flex flex-col items-center space-y-2">
-                                <Upload className="h-6 w-6 text-primary" />
-                                <span className="text-sm text-muted-foreground">
-                                  Collection image
-                                </span>
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <Label htmlFor="existing-collection">Existing Collection Mint Address *</Label>
-                          <Input
-                            id="existing-collection"
-                            value={collectionConfig.existingCollectionMint}
-                            onChange={(e) => setCollectionConfig(prev => ({ ...prev, existingCollectionMint: e.target.value }))}
-                            placeholder="Enter collection mint address"
-                            disabled={loading}
-                          />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Master Edition Configuration */}
-                  <Card className="bg-muted/50 border-dashed border-2 border-amber-500/20">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Crown className="h-5 w-5" />
-                        Master Edition Settings
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="create-master-edition"
-                          checked={masterEditionConfig.createMasterEdition}
-                          onCheckedChange={(checked: boolean) =>
-                            setMasterEditionConfig(prev => ({ ...prev, createMasterEdition: checked }))
-                          }
-                          disabled={loading}
-                        />
-                        <Label htmlFor="create-master-edition">Create as Master Edition</Label>
-                      </div>
-
-                      {masterEditionConfig.createMasterEdition && (
-                        <div>
-                          <Label htmlFor="max-supply">Max Supply (Optional)</Label>
-                          <Input
-                            id="max-supply"
-                            type="number"
-                            value={masterEditionConfig.maxSupply || ''}
-                            onChange={(e) => setMasterEditionConfig(prev => ({
-                              ...prev,
-                              maxSupply: e.target.value ? parseInt(e.target.value) : null
-                            }))}
-                            placeholder="Leave empty for unlimited"
-                            disabled={loading}
-                          />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
 
                   {/* Image Upload */}
                   <div>
@@ -677,30 +385,6 @@ export default function LaunchpadPage() {
 
                 {/* Right Column - Preview */}
                 <div className="space-y-6">
-                  {/* Collection Preview */}
-                  {collectionConfig.createNewCollection && collectionImagePreview && (
-                    <Card className="bg-muted p-4 rounded-xl">
-                      <CardHeader className="p-0 mb-2">
-                        <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <Layers className="h-4 w-4" />
-                          Collection Preview
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <Image
-                          src={collectionImagePreview}
-                          alt="Collection Preview"
-                          width={200}
-                          height={200}
-                          className="object-cover rounded-lg mb-2 border border-border"
-                        />
-                        <h5 className="font-semibold text-foreground text-sm">
-                          {collectionConfig.collectionName || 'Collection Name'}
-                        </h5>
-                      </CardContent>
-                    </Card>
-                  )}
-
                   {/* NFT Preview */}
                   <Card className="bg-muted p-6 rounded-xl">
                     <CardHeader className="p-0 mb-4">
@@ -725,12 +409,6 @@ export default function LaunchpadPage() {
                         <h4 className="font-semibold text-foreground text-xl">
                           {formData.name || 'NFT Name'}
                         </h4>
-                        {masterEditionConfig.createMasterEdition && (
-                          <Badge variant="outline" className="text-xs">
-                            <Crown className="h-3 w-3 mr-1" />
-                            Master Edition
-                          </Badge>
-                        )}
                       </div>
 
                       <p className="text-sm text-muted-foreground mb-4">
