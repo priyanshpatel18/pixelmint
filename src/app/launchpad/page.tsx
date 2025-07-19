@@ -40,7 +40,6 @@ const umi = createUmi('https://api.devnet.solana.com').use(mplTokenMetadata())
 
 export default function LaunchpadPage() {
   const { publicKey: walletPublicKey, wallet } = useWallet()
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed')
   const [step, setStep] = useState<number>(1)
   const [loading, setLoading] = useState<boolean>(false)
   const [success, setSuccess] = useState<boolean>(false)
