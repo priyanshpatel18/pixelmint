@@ -13,6 +13,10 @@ interface HeliusNFT {
       image?: string;
     };
   };
+  grouping?: {
+    group_key: string;
+    group_value: string;
+  }[];
 }
 
 export function useHeliusNFTs() {
@@ -30,14 +34,25 @@ export function useHeliusNFTs() {
       const raw = await res.json();
 
       const items: HeliusNFT[] = raw.result?.items ?? [];
+
       return items
-        .filter((nft) => nft.content?.metadata?.name && nft.content?.links?.image)
-        .map((nft): NFT => ({
-          mint: nft.id,
-          name: nft.content.metadata?.name ?? "Unnamed NFT",
-          symbol: nft.content.metadata?.symbol ?? "",
-          image: nft.content.links?.image ?? "",
-        }));
+        .filter((nft) =>
+          nft.content?.metadata?.name &&
+          nft.content?.links?.image &&
+          nft.grouping?.some((g) => g.group_key === "collection")
+        )
+        .map((nft): NFT => {
+          const collection = nft.grouping!.find((g) => g.group_key === "collection")!.group_value;
+          console.log(`https://explorer.solana.com/account/${collection}?cluster=devnet`);
+          
+          return {
+            mint: nft.id,
+            name: nft.content.metadata?.name ?? "Unnamed NFT",
+            symbol: nft.content.metadata?.symbol ?? "",
+            image: nft.content.links?.image ?? "",
+            collection,
+          };
+        });
     },
   });
 }
