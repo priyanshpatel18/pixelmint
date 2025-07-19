@@ -14,7 +14,6 @@ import {
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults'
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { Connection } from '@solana/web3.js'
 import { Check, ImageIcon, Loader2, Rocket, Sparkles, Upload, X } from 'lucide-react'
 import Image from 'next/image'
 import { ChangeEvent, useCallback, useState } from 'react'
