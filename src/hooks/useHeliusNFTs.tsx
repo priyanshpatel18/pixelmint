@@ -3,14 +3,14 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { NFT } from "@/types/nft";
 
 interface HeliusNFT {
-  mint: string;
+  id: string; // mint address
   content: {
-    metadata: {
-      name: string;
-      symbol: string;
+    metadata?: {
+      name?: string;
+      symbol?: string;
     };
-    links: {
-      image: string;
+    links?: {
+      image?: string;
     };
   };
 }
@@ -30,18 +30,13 @@ export function useHeliusNFTs() {
       const raw = await res.json();
 
       const items: HeliusNFT[] = raw.result?.items ?? [];
-
       return items
-        .filter(
-          (nft) =>
-            nft.content?.metadata?.name &&
-            nft.content?.links?.image
-        )
+        .filter((nft) => nft.content?.metadata?.name && nft.content?.links?.image)
         .map((nft): NFT => ({
-          mint: nft.mint,
-          name: nft.content.metadata.name,
-          symbol: nft.content.metadata.symbol,
-          image: nft.content.links.image,
+          mint: nft.id,
+          name: nft.content.metadata?.name ?? "Unnamed NFT",
+          symbol: nft.content.metadata?.symbol ?? "",
+          image: nft.content.links?.image ?? "",
         }));
     },
   });

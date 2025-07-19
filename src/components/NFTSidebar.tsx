@@ -47,7 +47,7 @@ export function MyNFTsSidebar() {
           <div className="flex-1 space-y-1">
             <h4 className="font-medium text-sm truncate">{shorten(nft.name, 20)}</h4>
             <p className="text-xs text-muted-foreground truncate">
-              {shorten(nft.mint)}
+              {shorten(nft.mint)}...
             </p>
           </div>
         </div>
