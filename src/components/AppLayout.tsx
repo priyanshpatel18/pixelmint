@@ -11,7 +11,6 @@ export function AppLayout({
   children
 }: {
   children: React.ReactNode
-  links: { label: string; path: string }[]
 }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
